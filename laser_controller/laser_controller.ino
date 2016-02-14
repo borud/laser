@@ -10,14 +10,14 @@
 
 #define VERSION_STRING "0.1.0"
 
-#define SERIAL_SPEED 9600
+#define SERIAL_SPEED 115200
 
 // Emergency shutoff button
 #define EMERGENCY_SHUTOFF 4
 
 // Laser control pins
-#define PIN_LASER_PWM     6
-#define PIN_LASER_POWER   7
+#define PIN_LASER_PWM    A3
+#define PIN_LASER_ARM     7
 
 // Stepper pins
 #define PIN_IN1       8
@@ -45,8 +45,8 @@ CustomStepper stepper(PIN_IN1, PIN_IN2, PIN_IN3, PIN_IN4,
 
 boolean stepper_run = false;
 long stepper_pos = 0;
-
-int laser_duty_cycle = 0;
+byte laser_duty_cycle = 0;
+boolean laser_armed = false;
 
 /**
  * Set up the application.
@@ -55,10 +55,9 @@ void setup() {
     Serial.begin(SERIAL_SPEED);
 
     // Set up ports for laser
-    pinMode(PIN_LASER_PWM, OUTPUT);
-    pinMode(PIN_LASER_POWER, OUTPUT);
-    digitalWrite(PIN_LASER_PWM, 0);
-    digitalWrite(PIN_LASER_POWER, 0);
+    pinMode(PIN_LASER_ARM, OUTPUT);
+    digitalWrite(PIN_LASER_ARM, LOW);
+    analogWrite(PIN_LASER_PWM, 0);    
     
     // Initialize stepper
     stepper.setRPM(STEPPER_RPM);
@@ -94,24 +93,59 @@ void step_focus(int n) {
 
 void emergency_stop() {
     // Turn off laser and turn PWM duty cycle down
-    
+    digitalWrite(PIN_LASER_ARM, LOW);
+    analogWrite(PIN_LASER_PWM, 0);
+    laser_duty_cycle = 0;
+    laser_armed = false;
+
+    Serial.println(F("520 LASER OFF (unarmed, duty_cycle = 0"));
     
     // Stop any rotation
     if (! stepper.isDone()) {
         stepper.setDirection(STOP);
         stepper_run = false;
-        Serial.println(F("520 STEPPER STOPPED, POSITION LOST"));
+        Serial.println(F("521 STEPPER STOPPED, POSITION LOST"));
     }
 }
 
 void step_zero_pos() {
-    stepper_pos = 0;
-    Serial.print(F("201 FOCUS pos = "));
+    Serial.print(F("209 FOCUS ZEROED, old pos = "));
     Serial.println(stepper_pos);
+    stepper_pos = 0;
 }
 
-void laser_on() {
+void laser_set_duty_cycle(byte n) {
+    laser_duty_cycle = n;
+    Serial.print(F("206 DUTY CYCLE "));
+    Serial.println(laser_duty_cycle);
+}
+
+void laser_fire(long n) {
+    if (! laser_armed) {
+        Serial.println(F("530 LASER UNARMED"));
+        return;
+    }
     
+    analogWrite(PIN_LASER_PWM, laser_duty_cycle);
+    delay(n);
+    analogWrite(PIN_LASER_PWM, 0);
+    Serial.print(F("205 LASER FIRED "));
+    Serial.print(n);
+    Serial.print(F(" ms @ "));
+    Serial.print(laser_duty_cycle);
+    Serial.println(F("/255 duty cycle"));
+}
+
+void laser_arm() {
+    digitalWrite(PIN_LASER_ARM, HIGH);
+    laser_armed = true;
+    Serial.println(F("207 LASER ARMED"));
+}
+
+void laser_unarm() {
+    digitalWrite(PIN_LASER_ARM, LOW);
+    laser_armed = false;
+    Serial.println(F("208 LASER UNARMED"));
 }
 
 void parse_command(char* s) {
@@ -122,12 +156,20 @@ void parse_command(char* s) {
             emergency_stop();
             break;
 
+        case 'a':
+            laser_arm();
+            break;
+            
+        case 'u':
+            laser_unarm();
+            break;
+
         case 'd':
-            // laser_duty_cycle(atoi(s+1));
+            laser_set_duty_cycle(atoi(s+1));
             break;
 
         case 'f':
-            // laser_fire(atoi(s+1));
+            laser_fire(atoi(s+1));
             break;
             
         case 'p':
@@ -141,7 +183,7 @@ void parse_command(char* s) {
         case 'h':
             print_help();
             break;
-            
+
         default:
             Serial.println(F("501 UNKNOWN COMMAND"));
             break;
