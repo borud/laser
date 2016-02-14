@@ -85,7 +85,7 @@ void step_focus(int n) {
         stepper.rotateDegrees(-n);
     }
 
-    Serial.print(F("203 FOCUS "));
+    Serial.print(F("204 FOCUS "));
     Serial.println(n);
 
     stepper_pos += n;
