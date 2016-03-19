@@ -16,7 +16,7 @@
 #define EMERGENCY_SHUTOFF 4
 
 // Laser control pins
-#define PIN_LASER_PWM    A3
+#define PIN_LASER_PWM     3
 #define PIN_LASER_ARM     7
 
 // Stepper pins
